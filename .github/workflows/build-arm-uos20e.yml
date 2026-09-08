@@ -79,7 +79,7 @@ jobs:
       - name: Configure, build, test, and verify in Debian central container
         run: |
           docker run --rm --platform linux/arm64 \
-            --user "$(id -u):$(id -g)" \
+            --user 0:0 \
             --env HOME=/tmp/obn-home \
             --volume "$GITHUB_WORKSPACE:/work" \
             --workdir /work \
@@ -87,6 +87,15 @@ jobs:
             -lc 'set -euo pipefail
               mkdir -p "$HOME"
               git config --global --add safe.directory /work
+              export DEBIAN_FRONTEND=noninteractive
+              apt_options=(
+                -o Acquire::Check-Valid-Until=false
+                -o Acquire::AllowInsecureRepositories=true
+                -o APT::Get::AllowUnauthenticated=true
+              )
+              apt-get update "${apt_options[@]}"
+              apt-get install -y --no-install-recommends \
+                "${apt_options[@]}" uthash-dev
               ./configure \
                 --build-type=Release \
                 --enable-tests \
