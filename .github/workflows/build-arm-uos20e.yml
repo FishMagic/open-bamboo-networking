@@ -95,7 +95,6 @@ jobs:
               )
               apt-get update "${apt_options[@]}"
               uthash_tmp=$(mktemp -d)
-              trap 'rm -rf "$uthash_tmp"' EXIT
               (
                 cd "$uthash_tmp"
                 apt-get "${apt_options[@]}" download uthash-dev
@@ -104,6 +103,7 @@ jobs:
                 -name "uthash-dev_*.deb" -print -quit)
               test -n "$uthash_deb"
               dpkg-deb -x "$uthash_deb" /
+              rm -rf "$uthash_tmp"
               ./configure \
                 --build-type=Release \
                 --enable-tests \
