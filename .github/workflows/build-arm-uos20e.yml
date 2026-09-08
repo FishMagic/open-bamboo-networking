@@ -116,7 +116,7 @@ jobs:
               curl -fsSL \
                 "https://cmake.org/files/v3.31/cmake-${cmake_version}-linux-aarch64.tar.gz" \
                 -o "$cmake_archive"
-              printf '%s  %s\n' \
+              printf "%s  %s\n" \
                 83f8fd91d2038a56556e1400390fcfe42f79602940c494f6c6f1cdae7f9e7f40 \
                 "$cmake_archive" | sha256sum -c -
               tar -xzf "$cmake_archive" -C "$cmake_tmp"
