@@ -121,14 +121,14 @@ jobs:
                 "$cmake_archive" | sha256sum -c -
               tar -xzf "$cmake_archive" -C "$cmake_tmp"
               export PATH="$cmake_tmp/cmake-${cmake_version}-linux-aarch64/bin:$PATH"
-              export CXXFLAGS="${CXXFLAGS:-} -DSSL_get1_peer_certificate=SSL_get_peer_certificate"
+              export CXXFLAGS="${CXXFLAGS:-} -pthread -DSSL_get1_peer_certificate=SSL_get_peer_certificate"
               cmake --version
               ./configure \
                 --build-type=Release \
                 --enable-tests \
                 --with-version="${{ matrix.abi }}.99" \
                 --no-conf-patch \
-                --cmake-arg="-DCMAKE_CXX_STANDARD_LIBRARIES=-pthread;-lstdc++fs"
+                --cmake-arg="-DCMAKE_CXX_STANDARD_LIBRARIES=-lstdc++fs"
               make -j"$(nproc)"
               make test
               tools/check_abi_compat.sh \
