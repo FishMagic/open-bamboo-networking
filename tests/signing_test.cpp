@@ -8,6 +8,7 @@
 #include <openssl/asn1.h>
 #include <openssl/bn.h>
 #include <openssl/evp.h>
+#include <openssl/opensslv.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
@@ -35,6 +36,31 @@
 // ---------------------------------------------------------------------------
 
 static EVP_PKEY* g_test_key = nullptr;
+
+static EVP_PKEY* generate_test_rsa_key(int bits)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    return EVP_RSA_gen(bits);
+#else
+    // EVP_RSA_gen was added in OpenSSL 3. Keep the test buildable against
+    // the OpenSSL 1.1 headers shipped by the Debian central image.
+    RSA* rsa = RSA_new();
+    BIGNUM* exponent = BN_new();
+    EVP_PKEY* key = EVP_PKEY_new();
+    if (!rsa || !exponent || !key ||
+        BN_set_word(exponent, RSA_F4) != 1 ||
+        RSA_generate_key_ex(rsa, bits, exponent, nullptr) != 1 ||
+        EVP_PKEY_assign_RSA(key, rsa) != 1) {
+        RSA_free(rsa);
+        BN_free(exponent);
+        EVP_PKEY_free(key);
+        return nullptr;
+    }
+    // EVP_PKEY_assign_RSA transfers ownership of rsa to key.
+    BN_free(exponent);
+    return key;
+#endif
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -482,8 +508,8 @@ namespace obn::config {
 int main()
 {
     // Generate fresh RSA-2048 keypair for signing tests.
-    g_test_key = EVP_RSA_gen(2048);
-    if (!g_test_key) { std::cerr << "EVP_RSA_gen failed\n"; return 1; }
+    g_test_key = generate_test_rsa_key(2048);
+    if (!g_test_key) { std::cerr << "RSA test key generation failed\n"; return 1; }
 
     // Write private key to a temp PEM file and point the config at it.
     char tmp_path[] = "/tmp/signing_test_XXXXXX";
