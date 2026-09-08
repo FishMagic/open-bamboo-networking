@@ -1,8 +1,8 @@
-# Build the Linux arm64 artifacts in the native UOS20E arm64 environment.
+# Build the Linux arm64 artifacts in the Debian central arm64 environment.
 # Checkout and artifact transfer stay on the GitHub-hosted ARM runner;
 # configure, compile, tests, and ABI verification run inside the image.
 
-name: Build ARM Linux (UOS20E)
+name: Build ARM Linux (Debian central)
 
 on:
   push:
@@ -39,7 +39,7 @@ jobs:
           echo "Discovered ABI versions: $VERSIONS"
 
   build:
-    name: v${{ matrix.abi }}.xx-linux-aarch64-uos20e
+    name: v${{ matrix.abi }}.xx-linux-aarch64-debian-central
     needs: [discover-abi]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
@@ -49,13 +49,13 @@ jobs:
         abi: ${{ fromJSON(needs.discover-abi.outputs.abi-matrix) }}
 
     env:
-      UOS20E_IMAGE: ghcr.io/fishmagic/uos20e-arm64:latest
+      DEBIAN_CENTRAL_IMAGE: ghcr.io/fishmagic/uos20e-arm64:central-buster
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Pull and validate UOS20E ARM64 build image
+      - name: Pull and validate Debian central ARM64 build image
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -65,25 +65,25 @@ jobs:
             --username "$GITHUB_ACTOR" --password-stdin; then
             echo "::warning::GHCR authentication failed; continuing with an anonymous pull."
           fi
-          if ! docker pull --platform linux/arm64 "$UOS20E_IMAGE"; then
-            echo "::error::Unable to pull $UOS20E_IMAGE. Build or publish the image from FishMagic/uos20-arm-oci first."
+          if ! docker pull --platform linux/arm64 "$DEBIAN_CENTRAL_IMAGE"; then
+            echo "::error::Unable to pull $DEBIAN_CENTRAL_IMAGE. Build or publish the central image from FishMagic/uos20-arm-oci first."
             exit 1
           fi
-          image_platform=$(docker image inspect "$UOS20E_IMAGE" \
+          image_platform=$(docker image inspect "$DEBIAN_CENTRAL_IMAGE" \
             --format '{{.Os}}/{{.Architecture}}')
           test "$image_platform" = linux/arm64 || {
-            echo "::error::Expected $UOS20E_IMAGE to be linux/arm64, got $image_platform"
+            echo "::error::Expected $DEBIAN_CENTRAL_IMAGE to be linux/arm64, got $image_platform"
             exit 1
           }
 
-      - name: Configure, build, test, and verify in UOS20E container
+      - name: Configure, build, test, and verify in Debian central container
         run: |
           docker run --rm --platform linux/arm64 \
             --user "$(id -u):$(id -g)" \
             --env HOME=/tmp/obn-home \
             --volume "$GITHUB_WORKSPACE:/work" \
             --workdir /work \
-            "$UOS20E_IMAGE" \
+            "$DEBIAN_CENTRAL_IMAGE" \
             -lc 'set -euo pipefail
               mkdir -p "$HOME"
               git config --global --add safe.directory /work
@@ -111,6 +111,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: obn-linux-v${{ matrix.abi }}.xx-aarch64-uos20e
+          name: obn-linux-v${{ matrix.abi }}.xx-aarch64-debian-central
           path: dist/
           if-no-files-found: error
