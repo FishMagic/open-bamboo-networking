@@ -1,0 +1,116 @@
+# Build the Linux arm64 artifacts in the native UOS20E arm64 environment.
+# Checkout and artifact transfer stay on the GitHub-hosted ARM runner;
+# configure, compile, tests, and ABI verification run inside the image.
+
+name: Build ARM Linux (UOS20E)
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover-abi:
+    name: Discover ABI versions
+    runs-on: ubuntu-24.04
+    outputs:
+      abi-matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: List ABI versions from abi_snapshot dirs
+        id: list
+        run: |
+          set -euo pipefail
+          VERSIONS=$(ls -d tools/abi_snapshot/v*/ \
+            | sed 's|.*/v||; s|/$||' \
+            | jq -Rnc '[inputs]')
+          echo "matrix=$VERSIONS" >> "$GITHUB_OUTPUT"
+          echo "Discovered ABI versions: $VERSIONS"
+
+  build:
+    name: v${{ matrix.abi }}.xx-linux-aarch64-uos20e
+    needs: [discover-abi]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(needs.discover-abi.outputs.abi-matrix) }}
+
+    env:
+      UOS20E_IMAGE: ghcr.io/fishmagic/uos20e-arm64:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Pull and validate UOS20E ARM64 build image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          if ! printf '%s' "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin; then
+            echo "::warning::GHCR authentication failed; continuing with an anonymous pull."
+          fi
+          if ! docker pull --platform linux/arm64 "$UOS20E_IMAGE"; then
+            echo "::error::Unable to pull $UOS20E_IMAGE. Build or publish the image from FishMagic/uos20-arm-oci first."
+            exit 1
+          fi
+          image_platform=$(docker image inspect "$UOS20E_IMAGE" \
+            --format '{{.Os}}/{{.Architecture}}')
+          test "$image_platform" = linux/arm64 || {
+            echo "::error::Expected $UOS20E_IMAGE to be linux/arm64, got $image_platform"
+            exit 1
+          }
+
+      - name: Configure, build, test, and verify in UOS20E container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp/obn-home \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --workdir /work \
+            "$UOS20E_IMAGE" \
+            -lc 'set -euo pipefail
+              mkdir -p "$HOME"
+              git config --global --add safe.directory /work
+              ./configure \
+                --build-type=Release \
+                --enable-tests \
+                --with-version="${{ matrix.abi }}.99" \
+                --no-conf-patch
+              make -j"$(nproc)"
+              make test
+              tools/check_abi_compat.sh \
+                --abi="${{ matrix.abi }}" \
+                --so=build/libbambu_networking.so'
+
+      - name: Stage artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/libbambu_networking.so dist/
+          cp build/libBambuSource.so      dist/
+          cp build/liblive555.so          dist/
+          cp build/network_plugins.json   dist/
+          ls -l dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: obn-linux-v${{ matrix.abi }}.xx-aarch64-uos20e
+          path: dist/
+          if-no-files-found: error
