@@ -1,5 +1,8 @@
-# Build and test open-bamboo-networking on Linux x64 / aarch64,
+# Build and test open-bamboo-networking on Linux x64,
 # Windows x64 + ARM64 (MSVC + vcpkg manifest), and macOS arm64.
+#
+# Linux aarch64 is intentionally not built here: build-arm-uos20e.yml builds
+# it inside ghcr.io/fishmagic/uos20e-arm64:latest on a native ARM runner.
 # release.yml always builds both macOS architectures.
 #
 # Version strategy: the plugin must report a string whose first 8 characters
@@ -9,7 +12,7 @@
 # uses for local auto-detection). This means CI follows upstream releases
 # automatically -- no manual version bumps in this repo.
 #
-# Linux artifacts (one set per ABI version / architecture):
+# Linux x64 artifacts (one set per ABI version):
 #   * libbambu_networking.so
 #   * libBambuSource.so
 #   * liblive555.so
@@ -64,14 +67,13 @@ jobs:
   build:
     name: v${{ matrix.abi }}.xx-linux-${{ matrix.arch }}
     needs: [discover-abi]
-    runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         abi: ${{ fromJSON(needs.discover-abi.outputs.abi-matrix) }}
         arch:
           - x64
-          - aarch64
 
     steps:
       - name: Checkout
