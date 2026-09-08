@@ -78,7 +78,13 @@ jobs:
 
       - name: Configure, build, test, and verify in Debian central container
         run: |
-          docker run --rm --platform linux/arm64 \
+          set -euo pipefail
+          container_name="obn-arm-${GITHUB_RUN_ID}-${{ matrix.abi }}"
+          cleanup() {
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run --name "$container_name" --platform linux/arm64 \
             --user 0:0 \
             --env HOME=/tmp/obn-home \
             --volume "$GITHUB_WORKSPACE:/work" \
@@ -125,16 +131,24 @@ jobs:
               make test
               tools/check_abi_compat.sh \
                 --abi="${{ matrix.abi }}" \
-                --so=build/libbambu_networking.so'
+                --so=build/libbambu_networking.so
+              mkdir -p /tmp/obn-artifacts
+              cp build/libbambu_networking.so /tmp/obn-artifacts/
+              cp build/libBambuSource.so      /tmp/obn-artifacts/
+              cp build/liblive555.so          /tmp/obn-artifacts/
+              cp build/network_plugins.json   /tmp/obn-artifacts/'
+          mkdir -p dist
+          docker cp "$container_name:/tmp/obn-artifacts/." dist/
+          docker rm "$container_name"
+          trap - EXIT
 
       - name: Stage artifacts
         run: |
           set -euo pipefail
-          mkdir -p dist
-          cp build/libbambu_networking.so dist/
-          cp build/libBambuSource.so      dist/
-          cp build/liblive555.so          dist/
-          cp build/network_plugins.json   dist/
+          test -f dist/libbambu_networking.so
+          test -f dist/libBambuSource.so
+          test -f dist/liblive555.so
+          test -f dist/network_plugins.json
           ls -l dist/
 
       - name: Upload artifacts
