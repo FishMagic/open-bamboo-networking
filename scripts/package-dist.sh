@@ -10,7 +10,7 @@
 #
 # Input:  artifacts/obn-linux-v02.05.03.xx-x64/  (etc.)
 # Output: dist-out/obn-linux-x64.tar.gz
-#         dist-out/obn-linux-aarch64.tar.gz
+#         dist-out/obn-linux-aarch64.tar.gz (when supplied by the UOS20E run)
 #         dist-out/obn-windows-x64.zip
 #         dist-out/obn-windows-arm64.zip
 #         dist-out/obn-macos-arm64.tar.gz
@@ -103,18 +103,22 @@ echo "  -> obn-linux-x64.tar.gz"
 
 # ── Linux aarch64 ────────────────────────────────────────────────────────
 
-echo "Assembling obn-linux-aarch64..."
-STAGE="$OUTDIR/obn-linux-aarch64"
-rm -rf "$STAGE"
-mkdir -p "$STAGE"
-collect_abi_dirs "obn-linux-v*-aarch64" "$STAGE"
-cp "$REPO_ROOT/packaging/install.sh" "$STAGE/"
-chmod +x "$STAGE/install.sh"
-write_version_file "$STAGE"
-generate_readme "Linux aarch64" "install.sh" \
-    "Run:  chmod +x install.sh && ./install.sh" "$STAGE/README.txt"
-(cd "$OUTDIR" && tar czf obn-linux-aarch64.tar.gz obn-linux-aarch64/)
-echo "  -> obn-linux-aarch64.tar.gz"
+if ls "$ARTIFACTS"/obn-linux-v*-aarch64* 1>/dev/null 2>&1; then
+    echo "Assembling obn-linux-aarch64..."
+    STAGE="$OUTDIR/obn-linux-aarch64"
+    rm -rf "$STAGE"
+    mkdir -p "$STAGE"
+    collect_abi_dirs "obn-linux-v*-aarch64*" "$STAGE"
+    cp "$REPO_ROOT/packaging/install.sh" "$STAGE/"
+    chmod +x "$STAGE/install.sh"
+    write_version_file "$STAGE"
+    generate_readme "Linux aarch64" "install.sh" \
+        "Run:  chmod +x install.sh && ./install.sh" "$STAGE/README.txt"
+    (cd "$OUTDIR" && tar czf obn-linux-aarch64.tar.gz obn-linux-aarch64/)
+    echo "  -> obn-linux-aarch64.tar.gz"
+else
+    echo "Skipping obn-linux-aarch64 (built by build-arm-uos20e.yml)"
+fi
 
 # ── Windows x64 ──────────────────────────────────────────────────────────
 
